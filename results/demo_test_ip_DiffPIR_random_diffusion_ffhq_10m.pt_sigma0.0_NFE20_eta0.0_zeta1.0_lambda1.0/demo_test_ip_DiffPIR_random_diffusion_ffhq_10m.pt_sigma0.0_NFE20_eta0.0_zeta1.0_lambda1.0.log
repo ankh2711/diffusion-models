@@ -1,0 +1,13 @@
+26-03-12 14:39:04.068 : model_name:diffusion_ffhq_10m.pt, mask_type:random, image sigma:0.000, model sigma:0.000
+26-03-12 14:39:04.069 : eta:0.000, zeta:1.000, lambda:1.000, guidance_scale:1.00 
+26-03-12 14:39:04.069 : start step:999, skip_type:quad, skip interval:50, skipstep analytic steps:0
+26-03-12 14:39:04.069 : Model path: DiffPIR/model_zoo/diffusion_ffhq_10m.pt
+26-03-12 14:39:04.069 : eta:0.000, zeta:1.000, lambda:1.000, guidance_scale:1.00
+26-03-12 14:39:57.400 : ---1-->   19-0.png PSNR: 9.6922dB
+26-03-12 14:39:57.434 : 19-0.png | Time: 53.33s | GPU memory: 0.00 MB
+26-03-12 14:39:57.434 : ------> Average PSNR of (demo_test), sigma: (0.000): 9.6922 dB
+26-03-16 19:09:41.775 : model_name:diffusion_ffhq_10m.pt, mask_type:random, image sigma:0.000, model sigma:0.000
+26-03-16 19:09:41.777 : eta:0.000, zeta:1.000, lambda:1.000, guidance_scale:1.00 
+26-03-16 19:09:41.777 : start step:999, skip_type:quad, skip interval:50, skipstep analytic steps:0
+26-03-16 19:09:41.777 : Model path: DiffPIR/model_zoo/diffusion_ffhq_10m.pt
+26-03-16 19:09:41.777 : eta:0.000, zeta:1.000, lambda:1.000, guidance_scale:1.00
