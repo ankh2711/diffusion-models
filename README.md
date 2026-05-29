@@ -19,18 +19,6 @@ Additionally, the system uses EfficientNet-based classifiers to:
 
 ---
 
-# Features
-
-* Automatic distortion classification
-* Automatic dataset/domain classification
-* Automatic mask generation
-* Adaptive restoration model selection
-* Support for multiple diffusion-based inpainting methods
-* Quality-oriented or speed-oriented restoration mode
-* Simple graphical file selection interface
-
----
-
 # Supported Distortion Types
 
 The system supports the following distortion classes:
