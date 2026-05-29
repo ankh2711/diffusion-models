@@ -10,7 +10,8 @@ from efficientnet.models.efficientnet import EfficientNet, params
 from collections import OrderedDict
 from torch import nn
 import numpy as np
-# from CoPaint.guided_diffusion.ddim import R_DDIMSampler
+import cv2
+
 
 def load_classifier(path):
     checkpoint = torch.load(path, map_location="cpu")
@@ -52,32 +53,20 @@ def load_dataset_classifier(path):
     model.eval()
     return model
 
-def classify_image(image, mask, model):
-    img_np = np.array(image).astype(np.float32)
-    mask_np = np.array(mask).astype(np.float32) / 255.0
-
-    if mask_np.shape[:2] != img_np.shape[:2]:
-        mask = Image.fromarray((mask_np * 255).astype(np.uint8)).resize(
-            (img_np.shape[1], img_np.shape[0]), Image.NEAREST)
-        mask_np = np.array(mask).astype(np.float32) / 255.0
-
-    if mask_np.ndim == 2:
-        mask_np = np.repeat(mask_np[:, :, np.newaxis], 3, axis=2)
-    elif mask_np.shape[2] == 4 and img_np.shape[2] == 3:
-        mask_np = mask_np[:, :, :3]
-
-    img_masked = img_np * mask_np
-    img_masked = Image.fromarray(img_masked.astype(np.uint8)).convert('RGB')
-
+def classify_image_no_mask(image, model):
     tfms = transforms.Compose([
         transforms.Resize(224),
         transforms.ToTensor(),
         transforms.Normalize([0.485,0.456,0.406], [0.229,0.224,0.225])
     ])
-    img_t = tfms(img_masked).unsqueeze(0)
+
+    img_t = tfms(image.convert('RGB')).unsqueeze(0)
+
     with torch.no_grad():
         probs = model(img_t).squeeze(0)
+
     pred_idx = int(torch.argmax(probs).item())
+
     labels_map = [
         '0_Periodic_noise',
         '1_Grid',
@@ -87,48 +76,143 @@ def classify_image(image, mask, model):
         '5_Rectangle',
         '6_Border'
     ]
+
     return labels_map[pred_idx], float(probs[pred_idx].item())
 
-def classify_dataset(image, mask, model):
-    img_np = np.array(image).astype(np.float32)
-    mask_np = np.array(mask).astype(np.float32) / 255.0
+def generate_gaussian_periodic_mask(image):
+    img_np = np.array(image)
+    if len(img_np.shape) == 3:
+        img_np = cv2.cvtColor(img_np, cv2.COLOR_RGB2GRAY)
 
-    if mask_np.shape[:2] != img_np.shape[:2]:
-        mask = Image.fromarray((mask_np * 255).astype(np.uint8)).resize(
-            (img_np.shape[1], img_np.shape[0]), Image.NEAREST)
-        mask_np = np.array(mask).astype(np.float32) / 255.0
+    mask = np.where(img_np == 0, 0, 255).astype(np.uint8)
 
-    if mask_np.ndim == 2:
-        mask_np = np.repeat(mask_np[:, :, np.newaxis], 3, axis=2)
-    elif mask_np.shape[2] == 4 and img_np.shape[2] == 3:
-        mask_np = mask_np[:, :, :3]
+    H, W = mask.shape
+    img_area = H * W
+    num_labels, labels, stats, _ = cv2.connectedComponentsWithStats((mask==0).astype(np.uint8), 8)
+    final_mask = np.ones((H, W), dtype=np.uint8) * 255
 
-    img_masked = img_np * mask_np
-    img_masked = Image.fromarray(img_masked.astype(np.uint8)).convert('RGB')
+    for i in range(1, num_labels):
+        area = stats[i, cv2.CC_STAT_AREA]
+        if area >= 1:
+            final_mask[labels == i] = 0
+
+    return final_mask
+
+def generate_stripes_mask(image):
+    img_np = np.array(image)
+    if len(img_np.shape) == 3:
+        img_np = cv2.cvtColor(img_np, cv2.COLOR_RGB2GRAY)
+
+    mask = np.where(img_np == 0, 0, 255).astype(np.uint8)
+
+    H, W = mask.shape
+    img_area = H * W
+    num_labels, labels, stats, _ = cv2.connectedComponentsWithStats((mask==0).astype(np.uint8), 8)
+
+    final_mask = np.ones((H, W), dtype=np.uint8) * 255
+
+    for i in range(1, num_labels):
+        area = stats[i, cv2.CC_STAT_AREA]
+        if area > 1:
+            final_mask[labels == i] = 0
+
+    return final_mask
+
+def generate_half_border_rectangle_grid_mask(image, min_area_ratio=0.01):
+    img_np = np.array(image)
+    if len(img_np.shape) == 3:
+        img_np = cv2.cvtColor(img_np, cv2.COLOR_RGB2GRAY)
+
+    mask = np.where(img_np == 0, 0, 255).astype(np.uint8)
+    H, W = mask.shape
+    img_area = H * W
+    num_labels, labels, stats, _ = cv2.connectedComponentsWithStats((mask == 0).astype(np.uint8), 8)
+
+    final_mask = np.ones((H, W), dtype=np.uint8) * 255
+
+    for i in range(1, num_labels):
+        area = stats[i, cv2.CC_STAT_AREA]
+        if area >= min_area_ratio * img_area:
+            final_mask[labels == i] = 0
+
+    return final_mask
+
+def generate_mask(image, label):
+    if label in ['1_Grid', '4_Half', '5_Rectangle', '6_Border']:
+        mask = generate_half_border_rectangle_grid_mask(image)
+
+    elif label in ['0_Periodic_noise', '3_Gaussian_noise']:
+        mask = generate_gaussian_periodic_mask(image)
+
+    else:
+        mask = generate_stripes_mask(image)
+
+    return Image.fromarray(mask)
+
+def classify_dataset(image, model):
 
     tfms = transforms.Compose([
         transforms.Resize(224),
         transforms.ToTensor(),
-        transforms.Normalize([0.485, 0.456, 0.406], [0.229, 0.224, 0.225])
+        transforms.Normalize(
+            [0.485, 0.456, 0.406],
+            [0.229, 0.224, 0.225]
+        )
     ])
-    img_t = tfms(img_masked).unsqueeze(0)
+
+    img_t = tfms(image.convert('RGB')).unsqueeze(0)
+
     with torch.no_grad():
         probs = model(img_t).squeeze(0)
+
     pred_idx = int(torch.argmax(probs).item())
+
     labels_map = [
-        'Celeba',
-        'Places2',
-        'Imagenet'
+        '0_Celeba',
+        '1_Imagenet',
+        '2_Places2'
     ]
+
     return labels_map[pred_idx], float(probs[pred_idx].item())
 
-def choose_model(pred_label):
-    if pred_label in ['4_Half', '5_Rectangle', '6_Border']:
-        return "RePaint"
-    elif pred_label in ['0_Periodic_noise', '3_Gaussian_noise']:
-        return "DiffPIR"
+def choose_model(pred_label, dataset_label, preference="quality"):
+
+    # порядок по скорости
+    FAST_PRIORITY = ["DiffPIR", "RePaint", "CoPaint"]
+
+    # порядок по качеству
+    if pred_label in ['0_Periodic_noise', '1_Grid', '2_Stripes', '4_Half', '6_Border']:
+        quality_order = ["CoPaint", "RePaint", "DiffPIR"]
+
+    elif pred_label == '3_Gaussian_noise':
+        quality_order = ["RePaint", "DiffPIR", "CoPaint"]
+
+    elif pred_label == '5_Rectangle':
+        quality_order = ["DiffPIR", "RePaint", "CoPaint"]
+
     else:
-        return "CoPaint"
+        quality_order = ["RePaint", "DiffPIR", "CoPaint"]
+
+    # допустимые модели
+    if pred_label in ['0_Periodic_noise', '1_Grid', '2_Stripes', '6_Border']:
+        suitable = ["CoPaint", "RePaint", "DiffPIR"]
+
+    elif pred_label == '3_Gaussian_noise':
+        suitable = ["RePaint", "DiffPIR"]
+
+    else:
+        suitable = ["CoPaint", "DiffPIR"]
+
+    if dataset_label != "0_Celeba":
+        suitable = [m for m in suitable if m != "CoPaint"]
+
+    priority = FAST_PRIORITY if preference == "fast" else quality_order
+
+    for m in priority:
+        if m in suitable:
+            return m
+
+    return suitable[0] if suitable else "RePaint"
 
 def choose_diffpir_model(dataset_label):
     if dataset_label == "Celeba":
@@ -136,20 +220,40 @@ def choose_diffpir_model(dataset_label):
     else:
         return "DiffPIR/model_zoo/imagenet256.pt"
 
-def auto_inpaint(image_path, mask_path, classifier_path, dataset_classifier_path, repaint_config_path):
+def auto_inpaint(image_path, classifier_path, dataset_classifier_path, repaint_config_path, preference):
+
     classifier_model = load_classifier(classifier_path)
     dataset_model = load_dataset_classifier(dataset_classifier_path)
-    image = Image.open(image_path)
-    mask = Image.open(mask_path)
-    label, conf = classify_image(image, mask, classifier_model)
-    print(f"Тип искажения: {label} (уверенность: {conf:.2f})")
-    chosen_model = choose_model(label)
-    print(f"Выбрана модель: {chosen_model}")
-    dataset_label, dataset_conf = classify_dataset(image, mask, dataset_model)
-    print(f"Тип изображения: {dataset_label} ({dataset_conf:.2f})")
-    diffpir_model = choose_diffpir_model(dataset_label)
-    # print(f"DiffPIR модель: {diffpir_model}")
 
+    image = Image.open(image_path).convert('RGB')
+
+    # 1. классификация искажения
+    label, conf = classify_image_no_mask(image, classifier_model)
+    print(f"Тип искажения: {label} ({conf:.2f})")
+
+    # 2. маска
+    mask = generate_mask(image, label)
+
+    # сохранить маску
+    base_name = os.path.splitext(os.path.basename(image_path))[0]
+    os.makedirs("generated_masks", exist_ok=True)
+
+    mask_path = f"generated_masks/{base_name}_mask.png"
+    mask.save(mask_path)
+
+    # print(f"Маска сохранена: {mask_path}")
+
+    # 3. классификация датасета
+    dataset_label, dataset_conf = classify_dataset(image, dataset_model)
+    print(f"Тип изображения: {dataset_label} ({dataset_conf:.2f})")
+
+    # 4. выбор модели
+    chosen_model = choose_model(label, dataset_label, preference)
+    print(f"Выбрана модель ({preference}): {chosen_model}")
+
+    diffpir_model = choose_diffpir_model(dataset_label)
+
+    # --- 5. восстановление ---
     if chosen_model == "RePaint":
         subprocess.run([
             "python", "RePaint/test.py",
@@ -157,8 +261,8 @@ def auto_inpaint(image_path, mask_path, classifier_path, dataset_classifier_path
             "--image_path", image_path,
             "--mask_path", mask_path
         ], check=True)
-        restored_path = "result/inpainted/test_image.png"
-        restored = Image.open(restored_path)
+        restored = Image.open("result/inpainted/test_image.png")
+
     elif chosen_model == "DiffPIR":
         subprocess.run([
             "python", "DiffPIR/main_diffpir.py",
@@ -167,6 +271,7 @@ def auto_inpaint(image_path, mask_path, classifier_path, dataset_classifier_path
             "--model_path", diffpir_model
         ], check=True)
         restored = Image.open("result/diffpir/restored.png")
+
     elif chosen_model == "CoPaint":
         subprocess.run([
             "python", "CoPaint/main.py",
@@ -178,47 +283,43 @@ def auto_inpaint(image_path, mask_path, classifier_path, dataset_classifier_path
 
     return restored
 
-# if __name__ == "__main__":
-#     img_path = "input/image/test_image.png"
-#     mask_path = "input/mask/test_mask.png"
-#     classifier_path = "checkpoint2911.pth"
-#     config_path = "RePaint/confs/imagenet.yaml"
-#
-#     restored_img = auto_inpaint(img_path, mask_path, classifier_path, config_path)
-#     restored_img.save("restored_result.png")
-
 if __name__ == "__main__":
     import tkinter as tk
-    from tkinter import filedialog
+    from tkinter import filedialog, simpledialog
 
-    # Создаем скрытое главное окно
     root = tk.Tk()
-    root.withdraw()  # Скрыть главное окно
+    root.withdraw()
 
-    # Открываем диалог выбора изображения
     img_path = filedialog.askopenfilename(
-        title="Выберите изображение для восстановления",
+        title="Выберите изображение",
         filetypes=[("Image files", "*.png *.jpg *.jpeg *.bmp")]
     )
 
     if not img_path:
-        print("Изображение не выбрано. Завершение работы.")
+        print("Изображение не выбрано.")
         exit()
 
-    # Открываем диалог выбора маски
-    mask_path = filedialog.askopenfilename(
-        title="Выберите маску для восстановления",
-        filetypes=[("Image files", "*.png *.jpg *.jpeg *.bmp")]
+    preference = simpledialog.askstring(
+        "Предпочтение",
+        "1 — качество\n2 — скорость\nВведите 1 или 2:"
     )
 
-    if not mask_path:
-        print("Маска не выбрана. Завершение работы.")
-        exit()
+    if preference == "2":
+        preference = "fast"
+    else:
+        preference = "quality"
 
     classifier_path = "checkpoint2911.pth"
-    dataset_classifier = "classifier.pth"
+    dataset_classifier = "checkpoint3103.pth"
     config_path = "RePaint/confs/imagenet.yaml"
 
-    restored_img = auto_inpaint(img_path, mask_path, classifier_path, dataset_classifier, config_path)
+    restored_img = auto_inpaint(
+        img_path,
+        classifier_path,
+        dataset_classifier,
+        config_path,
+        preference
+    )
+
     restored_img.save("restored_result.png")
     print("Результат сохранен как restored_result.png")
