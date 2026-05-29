@@ -309,8 +309,8 @@ if __name__ == "__main__":
     else:
         preference = "quality"
 
-    classifier_path = "checkpoint2911.pth"
-    dataset_classifier = "checkpoint3103.pth"
+    classifier_path = "distortion_classifier.pth"
+    dataset_classifier = "data_type_classifier.pth"
     config_path = "RePaint/confs/imagenet.yaml"
 
     restored_img = auto_inpaint(
