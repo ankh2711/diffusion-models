@@ -57,8 +57,8 @@ project/
 ├── generated_masks/
 ├── result/
 │
-├── checkpoint2911.pth
-├── checkpoint3103.pth
+├── distortion_classifier.pth
+├── data_type_classifier.pth
 │
 ├── main.py
 └── README.md
@@ -92,20 +92,15 @@ Please install dependencies for each framework separately according to their off
 
 ---
 
-# Model Checkpoints
+## Model Checkpoints
 
-Place classifier checkpoints in the project root:
+Download the classifier checkpoints and place them in the project root directory:
 
-```text
-checkpoint2911.pth
-checkpoint3103.pth
-```
+* Distortion classifier (`distortion_classifier.pth`):
+  [Download distortion_classifier.pth](https://disk.yandex.ru/d/LcfwCNRhtNcBGg)
 
-Where:
-
-* `checkpoint2911.pth` — distortion classifier
-* `checkpoint3103.pth` — dataset classifier
-
+* Data type classifier (`data_type_classifier.pth`):
+  [Download data_type_classifier.pth](https://disk.yandex.ru/d/TSNRzGIJiRbqVQ)
 ---
 
 # How It Works
