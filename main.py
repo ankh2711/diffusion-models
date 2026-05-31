@@ -274,7 +274,7 @@ def auto_inpaint(image_path, classifier_path, dataset_classifier_path, repaint_c
 
     elif chosen_model == "CoPaint":
         subprocess.run([
-            "python", "CoPaint/main.py",
+            "python", "CoPaint/main_copaint.py",
             "--input", image_path,
             "--mask", mask_path,
             "--model_path", "CoPaint/checkpoints/celeba256_250000.pt"
