@@ -92,6 +92,48 @@ Please install dependencies for each framework separately according to their off
 
 ---
 
+# Repository Setup
+
+Before running the project, download the required restoration frameworks and place them in the project root directory:
+
+```bash
+git clone https://github.com/andreas128/RePaint.git
+git clone https://github.com/ucsb-nlp-chang/copaint.git CoPaint
+git clone https://github.com/yuanzhi-zhu/DiffPIR.git
+```
+
+After downloading the repositories, replace several original files with the modified versions provided in this project.
+
+## Required File Replacement
+
+Replace the following files inside the downloaded repositories:
+
+| Repository | Original File           |
+| ---------- | ----------------------- |
+| CoPaint    | `CoPaint/main.py`       |
+| DiffPIR    | `DiffPIR/main_ddpir.py` |
+| RePaint    | `RePaint/test.py`       |
+
+The modified versions of these files are included in the root directory of this project:
+
+```text
+main_copaint.py
+main_diffpir.py
+test.py
+```
+
+Copy them as follows:
+
+```text
+main_copaint.py  →  CoPaint/main.py
+
+main_diffpir.py  →  DiffPIR/main_ddpir.py
+
+test.py          →  RePaint/test.py
+```
+
+These modified files contain the changes required for integration with the automatic restoration pipeline, including automatic mask processing, model invocation, and result handling.
+
 ## Model Checkpoints
 
 Download the classifier checkpoints and place them in the project root directory:
