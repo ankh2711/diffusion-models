@@ -53,10 +53,6 @@ project/
 ├── RePaint/
 ├── DiffPIR/
 ├── CoPaint/
-│
-├── generated_masks/
-├── result/
-│
 ├── distortion_classifier.pth
 ├── data_type_classifier.pth
 │
